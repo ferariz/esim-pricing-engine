@@ -7,7 +7,6 @@
 
 ---
 
-<!-- APP SCREENSHOT: Single Destination tab -->
 <!-- ![Pricing Engine App](docs/screenshot_app.png) -->
 
 ---
@@ -44,35 +43,53 @@ A five-component pricing data science system, built end-to-end in Python:
 | **A/B framework** | Power analysis, frequentist z-test, Bayesian Beta-Binomial | Experiment duration calculator, P(B>A) |
 | **Pricing engine** | Constraint-aware price optimiser + Streamlit UI | Recommended price with reasoning trace |
 
+> **Note on data:** This project uses synthetic data generated from a realistic econometric model (log-log demand, cluster-level elasticities, seasonality, competitive effects). The numbers reported below — elasticities, MAPE, R² — are properties of this synthetic market, not estimates from Holafly or any real dataset. The value of the project is in the **methodology and tooling**, not in the specific parameter values.
+
 ---
 
-## The Core Insight: Elasticity Is Not Uniform
+## The Modelling Approach
 
-The most commercially important finding from this project is also the simplest to state:
+### Why Log-Log Demand?
 
-**Asia-budget travellers are approximately 2× more price-sensitive than Americas-premium travellers.**
+The core specification is:
 
-| Cluster | Elasticity β | Interpretation |
-|---------|-------------|----------------|
-| `asia_budget` | −3.09 | A 10% price rise → 31% CR drop |
-| `mea_emerging` | −2.45 | A 10% price rise → 25% CR drop |
-| `europe_leisure` | −2.14 | A 10% price rise → 21% CR drop |
-| `longhaul_exotic` | −1.74 | A 10% price rise → 17% CR drop |
-| `americas_premium` | −1.54 | A 10% price rise → 15% CR drop |
+```
+log(CR) = α_i + β·log(price/ref_price) + γ·log(comp_price/price) + δ·log(seasonality) + ε
+```
 
-A uniform global price rule systematically overcharges elastic markets (losing conversion) and undercharges inelastic ones (leaving margin on the table). Cluster-aware pricing is not a nice-to-have — it is the baseline requirement for a rational pricing strategy.
+- **β (own-price elasticity):** our key parameter. β = −2 means a 10% price rise → ~20% CR drop.
+- **γ (cross-price elasticity):** competitive effect. Being more expensive than a competitor hurts CR.
+- **α_i:** destination fixed effects — absorb all time-invariant destination-level differences.
+
+The log-log form is chosen because it implies *constant elasticity* — a 1% price change produces the same β% CR response regardless of the price level. This is the standard assumption in demand econometrics for digital consumer products and is empirically well-supported in the literature (Tellis 1988, meta-analysis median β ≈ −1.76).
+
+### Model Validation on Synthetic Data
+
+Because the data is synthetic, we know the ground truth elasticity for every destination. This lets us do something impossible with real data: **directly validate how well the model recovers the true parameters.**
+
+<!-- ![Validation Plot](docs/screenshot_validation.png) -->
+
+The estimated vs true elasticity scatter clusters tightly around the 45° line (correlation > 0.90), confirming the model specification is correct and the estimation procedure is unbiased. On real data, this step would be replaced by out-of-sample holdout validation and comparison against natural experiments or IV estimates.
+
+### Why Segment-Level Elasticity Matters
+
+Across the five destination clusters in the synthetic market, the seeded elasticities span a range from −1.5 to −3.1. This spread — grounded in the empirical pricing literature on travel and digital goods — illustrates a structural point:
+
+**If elasticity varies by segment (and it does in every real travel market), a uniform global price rule is suboptimal by construction.** It simultaneously overcharges elastic segments (losing conversion) and undercharges inelastic ones (leaving margin on the table). Cluster-aware pricing is not a refinement — it is the correct baseline.
+
+On real data, the first deliverable of this pipeline would be measuring *how large* that spread actually is and which segments are most mis-priced today.
 
 ---
 
 ## The Pareto Frontier
 
-For each destination, there exists a price that maximises expected margin per session — the product of conversion rate and margin per unit. Below that price, you are giving away margin unnecessarily. Above it, you are losing more conversion than the margin gain is worth.
+For each destination, there exists a price that maximises expected margin per session — the product of conversion rate and margin per unit. The Pareto frontier makes this trade-off explicit and visual.
 
 <!-- ![Pareto Frontier](docs/screenshot_pareto.png) -->
 
-The shape of the frontier varies meaningfully by cluster. `americas_premium` has a flat right tail — you can push price quite high before margin per session deteriorates significantly. `asia_budget` collapses fast — the optimal price is lower, and the penalty for over-pricing is severe.
+The frontier is the key artefact for a commercial team. It answers the pricing question without requiring them to understand the underlying econometrics: *"here is every achievable (CR, margin) combination — the star marks where you should be."*
 
-This is the plot I would put in front of a commercial team. It answers the pricing question without requiring them to understand the underlying econometrics.
+The shape varies by segment. A flat right tail means you can push price high without much margin deterioration. A steep drop means the market is elastic and over-pricing is costly. These shapes are qualitatively robust to the exact parameter values — they reflect the structure of the demand function, not just the synthetic numbers.
 
 ---
 
@@ -80,13 +97,15 @@ This is the plot I would put in front of a commercial team. It answers the prici
 
 Elasticity tells you the *rate* — how CR responds to price. But the pricing decision also depends on *volume* — how many sessions you are optimising over.
 
-The same 5% margin improvement at 500 daily sessions (July, peak) is worth 2.5× more in absolute terms than at 200 sessions (January, trough). A pricing engine that ignores forecast volume will systematically misallocate effort.
+The same 5% margin improvement at 500 daily sessions (July peak) is worth 2.5× more in absolute terms than at 200 sessions (January trough). A pricing engine that ignores forecast volume will systematically misallocate effort.
 
-The global GBM demand model handles all 50 destinations simultaneously, sharing seasonal patterns across the portfolio. Key results:
+The global GBM demand model handles all 50 destinations simultaneously, sharing seasonal patterns across the portfolio. On the synthetic dataset:
 
 - **Test R² = 0.84** on a 60-day temporal holdout
-- **Overall MAPE = 16.1%** — well within the uncertainty of the elasticity estimates themselves
+- **Overall MAPE = 16.1%** — within the uncertainty of the elasticity estimates themselves
 - Lag features dominate importance: the best predictor of tomorrow's demand is the last 7 and 28 days
+
+The train/test R² gap (0.97 → 0.84) is expected and structural: lag features are perfectly autocorrelated in-sample. The test R² is the honest number.
 
 ---
 
@@ -94,9 +113,9 @@ The global GBM demand model handles all 50 destinations simultaneously, sharing 
 
 The pricing engine recommends. The A/B framework validates.
 
-Before rolling out any price change to 100% of traffic, the right process is:
+Before rolling out any price change to 100% of traffic:
 
-1. **Design**: power analysis to determine required sessions and experiment duration
+1. **Design**: power analysis determines required sessions and experiment duration
 2. **Run**: split traffic 50/50, collect CR data
 3. **Evaluate**: frequentist z-test for the binary decision; Bayesian Beta-Binomial for the probability statement
 
@@ -104,7 +123,7 @@ Two findings worth flagging:
 
 **Traffic is the binding constraint.** At individual destination level (~120 sessions/day), detecting a 10% CR lift requires 924 days. The right unit of experimentation is the cluster (~1,680 sessions/day), where the same effect is detectable in 66 days.
 
-**Peeking destroys statistical validity.** Checking significance daily and stopping at p < 0.05 inflates the false positive rate from the nominal 5% to ~20% — empirically demonstrated across 1,000 simulations.
+**Peeking destroys statistical validity.** Checking significance daily and stopping at p < 0.05 inflates the false positive rate from the nominal 5% to ~20% — empirically demonstrated across 1,000 simulations. In a pricing context, a false positive means rolling out a price change that does not actually improve performance.
 
 ---
 
@@ -124,13 +143,11 @@ The reasoning trace is deliberate. A pricing tool that outputs a number without 
 
 ## Technical Notes
 
-**Why log-log and not linear?** The log-log specification implies constant elasticity — a 1% price change always produces a β% CR change regardless of the price level. This is the standard assumption in demand econometrics and holds well empirically for digital consumer products.
+**HC3 robust standard errors** throughout the elasticity models — daily CR variance is heteroskedastic on low-traffic destinations, and HC3 gives honest uncertainty estimates without distributional assumptions.
 
-**Why a global GBM over per-destination Prophet?** With 50 destinations and ~365 observations each, per-destination models are prone to overfitting on low-volume series. A global model pools seasonal signal across the portfolio, shares structure, and generalises better.
+**Why a global GBM over per-destination Prophet?** With 50 destinations and ~365 observations each, per-destination models overfit on low-volume series. A global model pools seasonal signal across the portfolio and generalises better. Prophet is retained as a single-destination comparison in the notebook.
 
 **Why Bayesian A/B alongside frequentist?** Frequentist tests are the industry default. Bayesian tests give probability statements — *"94% chance the treatment is better"* — which are more actionable for a commercial team making continuous pricing decisions. Both are implemented; the right choice depends on the audience.
-
-**HC3 robust standard errors** throughout the elasticity models — daily CR variance is heteroskedastic on low-traffic destinations, and HC3 gives honest uncertainty estimates without distributional assumptions.
 
 ---
 
