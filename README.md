@@ -7,7 +7,7 @@
 
 ---
 
-<!-- ![Pricing Engine App](docs/screenshot_app.png) -->
+![Single Destination Pricing](docs/e-sim-dash1.png)
 
 ---
 
@@ -85,7 +85,7 @@ On real data, the first deliverable of this pipeline would be measuring *how lar
 
 For each destination, there exists a price that maximises expected margin per session — the product of conversion rate and margin per unit. The Pareto frontier makes this trade-off explicit and visual.
 
-<!-- ![Pareto Frontier](docs/screenshot_pareto.png) -->
+![Portfolio Overview](docs/e-sim-dash2.png)
 
 The frontier is the key artefact for a commercial team. It answers the pricing question without requiring them to understand the underlying econometrics: *"here is every achievable (CR, margin) combination — the star marks where you should be."*
 
@@ -129,7 +129,7 @@ Two findings worth flagging:
 
 ## The Pricing Engine
 
-<!-- ![Streamlit App](docs/screenshot_streamlit.png) -->
+![A/B Experiment Designer](docs/e-sim-dash3.png)
 
 The Streamlit app assembles all components into a tool a commercial team can use:
 
