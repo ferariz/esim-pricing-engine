@@ -196,6 +196,6 @@ jupyter lab notebooks/
 
 ## About
 
-Built as a portfolio project targeting a Senior Data Scientist (Pricing) role in the travel/connectivity vertical.
+A complete pricing data science system for travel eSIM products — elasticity modelling, demand forecasting, A/B experimentation, and a recommendation engine.
 
 **Fernando Arizmendi** — [GitHub](https://github.com/ferariz) · [LinkedIn](https://www.linkedin.com/in/fernando-arizmendi/) · [arizmendi.f@gmail.com](mailto:arizmendi.f@gmail.com)
