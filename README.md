@@ -43,7 +43,7 @@ A five-component pricing data science system, built end-to-end in Python:
 | **A/B framework** | Power analysis, frequentist z-test, Bayesian Beta-Binomial | Experiment duration calculator, P(B>A) |
 | **Pricing engine** | Constraint-aware price optimiser + Streamlit UI | Recommended price with reasoning trace |
 
-> **Note on data:** This project uses synthetic data generated from a realistic econometric model (log-log demand, cluster-level elasticities, seasonality, competitive effects). The numbers reported below — elasticities, MAPE, R² — are properties of this synthetic market, not estimates from Holafly or any real dataset. The value of the project is in the **methodology and tooling**, not in the specific parameter values.
+> **Note on data:** This project uses synthetic data generated from a realistic econometric model (log-log demand, cluster-level elasticities, seasonality, competitive effects). The numbers reported below — elasticities, MAPE, R² — are properties of this synthetic market, not estimates from any real dataset. The value of the project is in the **methodology and tooling**, not in the specific parameter values.
 
 ---
 
