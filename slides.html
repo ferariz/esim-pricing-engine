@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eSIM Pricing Engine · Fernando Arizmendi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;1,300&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d0f14;
+    --surface:   #13161e;
+    --border:    #1e2330;
+    --muted:     #3a4055;
+    --text-dim:  #6b7590;
+    --text:      #c8cfe0;
+    --text-hi:   #edf0f7;
+    --accent:    #4f8ef7;
+    --accent2:   #e05c6b;
+    --accent3:   #34c98a;
+    --accent4:   #f0a040;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'IBM Plex Sans', sans-serif;
+  }
+
+  html { scroll-behavior: smooth; scroll-snap-type: y mandatory; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* NAV */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    height: 48px;
+    background: rgba(13,15,20,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-brand {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+  .nav-dots {
+    display: flex;
+    gap: 6px;
+  }
+  .nav-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    cursor: pointer;
+    transition: background 0.2s;
+    border: none;
+  }
+  .nav-dot.active { background: var(--accent); }
+
+  /* SLIDES */
+  .slide {
+    min-height: 100vh;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px 6vw 60px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  .slide-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 1.2rem;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.6rem);
+    font-weight: 300;
+    color: var(--text-hi);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+  h1 em { font-style: normal; color: var(--accent); }
+
+  h2 {
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    font-weight: 300;
+    color: var(--text-hi);
+    letter-spacing: -0.02em;
+    margin-bottom: 0.6rem;
+  }
+
+  .subtitle {
+    font-size: 1rem;
+    color: var(--text-dim);
+    margin-top: 1rem;
+    max-width: 560px;
+    font-weight: 300;
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 3rem;
+    margin-top: 3rem;
+    flex-wrap: wrap;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+  }
+  .stat-num {
+    font-family: var(--mono);
+    font-size: 2.4rem;
+    font-weight: 600;
+    color: var(--text-hi);
+    line-height: 1;
+  }
+  .stat-num span { color: var(--accent); }
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* GRID LAYOUTS */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+  .three-col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
+  @media (max-width: 768px) {
+    .two-col, .three-col { grid-template-columns: 1fr; }
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.4rem;
+  }
+  .card-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 0.8rem;
+  }
+  .card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-hi);
+    margin-bottom: 0.5rem;
+  }
+  .card p {
+    font-size: 0.88rem;
+    color: var(--text-dim);
+    line-height: 1.55;
+  }
+
+  /* EQUATION */
+  .equation {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    color: var(--text-hi);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 1.2rem 1.6rem;
+    border-radius: 2px;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+  }
+  .equation .var { color: var(--accent); }
+  .equation .coef { color: var(--accent3); }
+  .equation .comment { color: var(--text-dim); font-size: 0.82rem; }
+
+  /* CHART CONTAINERS */
+  .chart-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.2rem;
+    overflow: hidden;
+  }
+  .chart-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  /* RESULT ROWS */
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+  .result-val {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent3);
+  }
+  .result-bar-wrap {
+    flex: 1;
+    margin: 0 1rem;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .result-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s ease;
+  }
+
+  /* INSIGHT BOXES */
+  .insight {
+    border-left: 2px solid var(--accent);
+    padding: 0.8rem 1.2rem;
+    margin: 1rem 0;
+    background: rgba(79,142,247,0.04);
+  }
+  .insight p {
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .insight strong { color: var(--text-hi); }
+
+  /* PIPELINE */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 2rem 0;
+    flex-wrap: wrap;
+  }
+  .pipe-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 0.9rem 1.2rem;
+    min-width: 120px;
+    text-align: center;
+  }
+  .pipe-step .ps-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+  .pipe-step .ps-label {
+    font-size: 12px;
+    color: var(--text-hi);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .pipe-arrow {
+    color: var(--muted);
+    font-size: 1.2rem;
+    padding: 0 4px;
+  }
+
+  /* FOOTER */
+  .slide-footer {
+    position: absolute;
+    bottom: 1.5rem;
+    right: 2rem;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  /* SVG DEFAULTS */
+  svg text { font-family: var(--mono); }
+
+  /* HIGHLIGHT */
+  .hi { color: var(--accent); }
+  .hi2 { color: var(--accent2); }
+  .hi3 { color: var(--accent3); }
+  .hi4 { color: var(--accent4); }
+
+  /* TAG */
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 2px 8px;
+    border-radius: 2px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+  }
+  .tag-blue  { background: rgba(79,142,247,0.12); color: var(--accent); border: 1px solid rgba(79,142,247,0.25); }
+  .tag-red   { background: rgba(224,92,107,0.12); color: var(--accent2); border: 1px solid rgba(224,92,107,0.25); }
+  .tag-green { background: rgba(52,201,138,0.12); color: var(--accent3); border: 1px solid rgba(52,201,138,0.25); }
+  .tag-amber { background: rgba(240,160,64,0.12); color: var(--accent4); border: 1px solid rgba(240,160,64,0.25); }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="nav-brand">esim-pricing-engine</span>
+  <div class="nav-dots" id="navDots"></div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 0 — HERO
+═══════════════════════════════════════════════════════════════ -->
+<section class="slide" id="s0">
+  <div class="slide-label">esim-pricing-engine · Fernando Arizmendi</div>
+  <h1>The price that<br>maximises <em>both</em><br>conversion and margin.</h1>
+  <p class="subtitle">End-to-end pricing data science for travel eSIM products — from raw transactions to a deployable recommendation engine.</p>
+  <div class="hero-stats">
+    <div class="stat">
+      <span class="stat-num">50<span></span></span>
+      <span class="stat-label">destinations</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">18<span>k</span></span>
+      <span class="stat-label">daily records</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">5<span></span></span>
+      <span class="stat-label">hitos shipped</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">0.84<span></span></span>
+      <span class="stat-label">forecast R²</span>
+    </div>
+  </div>
+  <div class="pipeline" style="margin-top:3rem;">
+    <div class="pipe-step"><div class="ps-num">01</div><div class="ps-label">Data</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><div class="ps-num">02</div><div class="ps-label">Elasticity</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><div class="ps-num">03</div><div class="ps-label">Forecast</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><div class="ps-num">04</div><div class="ps-label">A/B Test</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" style="border-color:var(--accent)"><div class="ps-num" style="color:var(--accent3)">05</div><div class="ps-label" style="color:var(--accent3)">Engine</div></div>
+  </div>
+  <div class="slide-footer">01 / 08</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 1 — THE PROBLEM
+═══════════════════════════════════════════════════════════════ -->
+<section class="slide" id="s1">
+  <div class="slide-label">The Problem</div>
+  <h2>One trade-off drives every pricing decision.</h2>
+  <div class="two-col" style="margin-top:2rem; gap:3rem;">
+    <div>
+      <div class="equation">
+        <div><span class="var">E[Margin/day]</span> =</div>
+        <div style="margin-top:6px; padding-left:1rem;">
+          <span class="var">Ŝ</span><sub style="font-size:0.75em">t</sub>
+          <span style="color:var(--text-dim)"> × </span>
+          <span class="coef">CR(p)</span>
+          <span style="color:var(--text-dim)"> × </span>
+          <span style="color:var(--accent4)">(p − c)</span>
+        </div>
+        <div style="margin-top:10px; font-size:0.8rem;">
+          <div class="comment">Ŝ  = forecasted daily sessions</div>
+          <div class="comment">CR = conversion rate at price p</div>
+          <div class="comment">c  = cost per unit</div>
+        </div>
+      </div>
+      <p style="font-size:0.88rem; color:var(--text-dim); line-height:1.7; margin-top:1rem;">
+        Lowering price raises CR but compresses margin per unit.<br>
+        Raising price does the reverse.<br><br>
+        The optimal price is the interior solution where the product of CR and unit margin is maximised — and it is <strong style="color:var(--text)">different for every destination cluster</strong>.
+      </p>
+    </div>
+    <div>
+      <div id="tradeoff-chart" class="chart-wrap"></div>
+      <div class="insight" style="margin-top:1rem;">
+        <p>A uniform global price rule <strong>overcharges elastic markets</strong> (losing conversion) and <strong>undercharges inelastic ones</strong> (leaving margin on the table).</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">02 / 08</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 2 — DATA
+═══════════════════════════════════════════════════════════════ -->
+<section class="slide" id="s2">
+  <div class="slide-label">Hito 1 · Data Foundation</div>
+  <h2>Synthetic data grounded in real econometrics.</h2>
+  <div class="three-col">
+    <div class="card">
+      <div class="card-label">DGP</div>
+      <h3>Log-log demand</h3>
+      <p>log(CR) = α + β·log(p/p_ref) + γ·log(p_comp/p) + δ·log(seasonality) + ε</p>
+      <p style="margin-top:0.6rem;">Constant elasticity assumption. β seeded per cluster from real econometric priors.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Scale</div>
+      <h3>18,250 rows</h3>
+      <p>50 destinations × 365 days. Five destination clusters with distinct elasticity profiles. Promotional dips, competitive random walks, Poisson session noise.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Seasonality</div>
+      <h3>Real travel calendar</h3>
+      <p>July demand is 55% above January baseline. School holidays, weekend peaks, and Christmas travel all embedded. Multiplied into session volume and CR signal.</p>
+    </div>
+  </div>
+  <div style="margin-top:2rem;">
+    <div id="seasonality-chart" class="chart-wrap"></div>
+  </div>
+  <div class="slide-footer">03 / 08</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 3 — ELASTICITY
+═══════════════════════════════════════════════════════════════ -->
+<section class="slide" id="s3">
+  <div class="slide-label">Hito 2 · Price Elasticity</div>
+  <h2>Asia-budget travellers are 2× more price-sensitive.</h2>
+  <div class="two-col" style="margin-top:1.5rem;">
+    <div>
+      <div id="elasticity-chart" class="chart-wrap"></div>
+      <p style="font-size:0.82rem; color:var(--text-dim); margin-top:0.6rem;">
+        Log-log OLS per cluster · destination fixed effects · HC3 robust SE
+      </p>
+    </div>
+    <div>
+      <div class="card-label" style="margin-bottom:1rem;">Model results</div>
+      <div id="r2-rows"></div>
+      <div class="insight" style="margin-top:1.5rem;">
+        <p>Cluster fixed effects absorb all time-invariant destination characteristics. The elasticity estimate comes purely from <strong>within-destination price variation over time</strong> — each destination is its own control.</p>
+      </div>
+      <div style="margin-top:1rem;">
+        <span class="tag tag-blue">log-log OLS</span>
+        <span class="tag tag-green">HC3 robust SE</span>
+        <span class="tag tag-amber">destination FE</span>
+        <span class="tag tag-red">cross-price γ</span>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">04 / 08</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 4 — PARETO FRONTIER
+═══════════════════════════════════════════════════════════════ -->
+<section class="slide" id="s4">
+  <div class="slide-label">Hito 2 · Pareto Frontier</div>
+  <h2>Every destination has an optimal price.</h2>
+  <div class="two-col" style="margin-top:1.5rem;">
+    <div>
+      <div id="pareto-chart" class="chart-wrap"></div>
+    </div>
+    <div>
+      <p style="color:var(--text-dim); font-size:0.9rem; line-height:1.7;">
+        The frontier shows every achievable (CR, margin/session) pair as price is swept from low to high. The <span class="hi3">★ star</span> marks the margin-optimal price.
+      </p>
+      <div style="margin-top:1.5rem;" id="frontier-table"></div>
+      <div class="insight" style="margin-top:1.5rem;">
+        <p><strong>americas_premium</strong> has a flat right tail — you can push price high before margin deteriorates. <strong>asia_budget</strong> collapses fast — the penalty for over-pricing is severe.</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">05 / 08</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 5 — FORECASTING
+═══════════════════════════════════════════════════════════════ -->
+<section class="slide" id="s5">
+  <div class="slide-label">Hito 3 · Demand Forecasting</div>
+  <h2>Volume scales the value of every pricing decision.</h2>
+  <div class="two-col" style="margin-top:1.5rem;">
+    <div>
+      <p style="font-size:0.9rem; color:var(--text-dim); margin-bottom:1.5rem; line-height:1.7;">
+        A global GBM model trained on all 50 destinations simultaneously. One model, shared seasonality structure, better generalisation on low-volume destinations.
+      </p>
+      <div id="forecast-metrics"></div>
+      <div class="insight" style="margin-top:1.5rem;">
+        <p>The same 5% margin improvement at 500 daily sessions (July peak) is worth <strong>2.5× more</strong> in absolute terms than at 200 sessions (January trough). Ignoring forecast volume misallocates pricing effort.</p>
+      </div>
+    </div>
+    <div>
+      <div id="forecast-chart" class="chart-wrap"></div>
+      <p style="font-size:0.8rem; color:var(--text-dim); margin-top:0.6rem;">
+        Lag features dominate importance — 7-day and 28-day lags are the strongest predictors of near-future demand.
+      </p>
+    </div>
+  </div>
+  <div class="slide-footer">06 / 08</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 6 — A/B TESTING
+═══════════════════════════════════════════════════════════════ -->
+<section class="slide" id="s6">
+  <div class="slide-label">Hito 4 · A/B Testing Framework</div>
+  <h2>The peeking problem is real. And quantified.</h2>
+  <div class="two-col" style="margin-top:1.5rem;">
+    <div>
+      <div id="peeking-chart" class="chart-wrap"></div>
+      <p style="font-size:0.8rem; color:var(--text-dim); margin-top:0.6rem;">
+        1,000 simulations under null hypothesis (no real effect). Stopping at first p&lt;0.05 inflates false positives 4×.
+      </p>
+    </div>
+    <div>
+      <div class="card-label" style="margin-bottom:1rem;">Experiment design for europe_leisure cluster</div>
+      <div id="power-table"></div>
+      <div class="insight" style="margin-top:1.5rem;">
+        <p>At <strong>cluster level</strong> (1,680 sessions/day), detecting a 10% CR lift takes 66 days. At individual destination level (120/day) it takes 924 days — not feasible.</p>
+      </div>
+      <div style="margin-top:1rem;">
+        <span class="tag tag-blue">power = 0.80</span>
+        <span class="tag tag-green">α = 0.05</span>
+        <span class="tag tag-amber">Bayesian P(B&gt;A)</span>
+        <span class="tag tag-red">Beta-Binomial</span>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">07 / 08</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 7 — ENGINE + CLOSE
+═══════════════════════════════════════════════════════════════ -->
+<section class="slide" id="s7">
+  <div class="slide-label">Hito 5 · Pricing Engine</div>
+  <h2>From model to decision.</h2>
+  <div class="three-col" style="margin-top:1.5rem;">
+    <div class="card" style="border-top: 2px solid var(--accent);">
+      <div class="card-label">Single destination</div>
+      <h3>Interactive optimiser</h3>
+      <p>Input price, elasticity, competitor price, sessions. Get recommended price with Pareto frontier plot and human-readable reasoning trace.</p>
+    </div>
+    <div class="card" style="border-top: 2px solid var(--accent3);">
+      <div class="card-label">Portfolio mode</div>
+      <h3>Batch recommendations</h3>
+      <p>One-click recommendations across all 50 destinations, ranked by daily margin uplift. Total annualised opportunity surfaced instantly.</p>
+    </div>
+    <div class="card" style="border-top: 2px solid var(--accent4);">
+      <div class="card-label">Experiment designer</div>
+      <h3>Power calculator</h3>
+      <p>Set traffic and MDE target. Get experiment duration, design table, and precision-duration trade-off chart. Peeking problem explainer included.</p>
+    </div>
+  </div>
+  <div style="margin-top:2.5rem; display:flex; gap:2rem; align-items:flex-start; flex-wrap:wrap;">
+    <div>
+      <div class="card-label" style="margin-bottom:0.8rem;">Stack</div>
+      <div>
+        <span class="tag tag-blue">pandas</span>
+        <span class="tag tag-blue">statsmodels</span>
+        <span class="tag tag-blue">scikit-learn</span>
+        <span class="tag tag-green">lightgbm</span>
+        <span class="tag tag-green">scipy</span>
+        <span class="tag tag-amber">streamlit</span>
+        <span class="tag tag-amber">matplotlib</span>
+        <span class="tag tag-red">pyarrow</span>
+      </div>
+    </div>
+    <div>
+      <div class="card-label" style="margin-bottom:0.8rem;">Repository</div>
+      <a href="https://github.com/ferariz/esim-pricing-engine"
+         style="font-family:var(--mono); font-size:12px; color:var(--accent); text-decoration:none; border-bottom:1px solid rgba(79,142,247,0.3); padding-bottom:1px;">
+        github.com/ferariz/esim-pricing-engine
+      </a>
+    </div>
+  </div>
+  <div style="margin-top:2.5rem; padding-top:1.5rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <div style="font-size:1rem; color:var(--text-hi); font-weight:600;">Fernando Arizmendi</div>
+      <div style="font-size:0.82rem; color:var(--text-dim); margin-top:2px;">PhD · Complex Systems · Senior Data Scientist</div>
+    </div>
+    <div style="display:flex; gap:1.5rem;">
+      <a href="https://github.com/ferariz" style="font-family:var(--mono); font-size:11px; color:var(--text-dim); text-decoration:none;">github/ferariz</a>
+      <a href="https://www.linkedin.com/in/fernando-arizmendi/" style="font-family:var(--mono); font-size:11px; color:var(--text-dim); text-decoration:none;">linkedin</a>
+      <a href="mailto:arizmendi.f@gmail.com" style="font-family:var(--mono); font-size:11px; color:var(--text-dim); text-decoration:none;">arizmendi.f@gmail.com</a>
+    </div>
+  </div>
+  <div class="slide-footer">08 / 08</div>
+</section>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// NAV DOTS
+// ─────────────────────────────────────────────────────────────
+const slides = document.querySelectorAll('.slide');
+const dotsContainer = document.getElementById('navDots');
+slides.forEach((_, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'nav-dot' + (i === 0 ? ' active' : '');
+  btn.addEventListener('click', () => slides[i].scrollIntoView({behavior:'smooth'}));
+  dotsContainer.appendChild(btn);
+});
+const dots = dotsContainer.querySelectorAll('.nav-dot');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const i = [...slides].indexOf(e.target);
+      dots.forEach((d,j) => d.classList.toggle('active', i===j));
+    }
+  });
+}, {threshold: 0.5});
+slides.forEach(s => observer.observe(s));
+
+// ─────────────────────────────────────────────────────────────
+// COLOURS
+// ─────────────────────────────────────────────────────────────
+const COLORS = {
+  europe_leisure:   '#4f8ef7',
+  asia_budget:      '#e05c6b',
+  americas_premium: '#f0a040',
+  mea_emerging:     '#c05cd4',
+  longhaul_exotic:  '#34c98a',
+};
+const CLUSTERS = Object.keys(COLORS);
+
+// ─────────────────────────────────────────────────────────────
+// SLIDE 1 — TRADE-OFF CURVE
+// ─────────────────────────────────────────────────────────────
+(function tradeoff() {
+  const el = document.getElementById('tradeoff-chart');
+  el.style.height = '260px';
+  const W = el.clientWidth || 420, H = 260;
+  const m = {t:20,r:20,b:40,l:50};
+  const svg = d3.select(el).append('svg').attr('width','100%').attr('height',H);
+  const w = W - m.l - m.r, h = H - m.t - m.b;
+  const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
+
+  // Generate CR vs margin/session curve
+  const prices = d3.range(4, 18, 0.1);
+  const refP = 9.82, baseCR = 0.056, beta = -2.14, gamma = 0.42, comp = 9.5, cost = 3.44;
+  const data = prices.map(p => {
+    const cr = Math.max(0.002, Math.min(0.35, baseCR * Math.exp(beta*Math.log(p/refP) + gamma*Math.log(comp/p))));
+    return {p, cr: cr*100, mps: cr*(p-cost)};
+  });
+  const opt = data.reduce((a,b) => b.mps > a.mps ? b : a);
+  const curr = data.reduce((a,b) => Math.abs(b.p-refP) < Math.abs(a.p-refP) ? b : a);
+
+  const xS = d3.scaleLinear().domain([0, d3.max(data,d=>d.cr)]).range([0,w]);
+  const yS = d3.scaleLinear().domain([0, d3.max(data,d=>d.mps)*1.1]).range([h,0]);
+
+  // Axes
+  g.append('g').attr('transform',`translate(0,${h})`)
+   .call(d3.axisBottom(xS).ticks(5).tickFormat(d=>d+'%'))
+   .call(ax => { ax.select('.domain').attr('stroke','#1e2330'); ax.selectAll('.tick line').attr('stroke','#1e2330'); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','10'); });
+  g.append('g').call(d3.axisLeft(yS).ticks(4).tickFormat(d=>'$'+d.toFixed(2)))
+   .call(ax => { ax.select('.domain').attr('stroke','#1e2330'); ax.selectAll('.tick line').attr('stroke','#1e2330'); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','10'); });
+
+  // Grid
+  g.append('g').attr('class','grid').selectAll('line').data(yS.ticks(4)).enter().append('line')
+   .attr('x1',0).attr('x2',w).attr('y1',d=>yS(d)).attr('y2',d=>yS(d)).attr('stroke','#1e2330').attr('stroke-dasharray','3,3');
+
+  // Curve
+  const line = d3.line().x(d=>xS(d.cr)).y(d=>yS(d.mps)).curve(d3.curveCatmullRom);
+  g.append('path').datum(data).attr('fill','none').attr('stroke','#4f8ef7').attr('stroke-width',2).attr('d',line);
+
+  // Points
+  g.append('circle').attr('cx',xS(curr.cr)).attr('cy',yS(curr.mps)).attr('r',6).attr('fill','#6b7590').attr('stroke','#0d0f14').attr('stroke-width',2);
+  g.append('text').attr('x',xS(curr.cr)+8).attr('y',yS(curr.mps)+4).attr('fill','#6b7590').attr('font-size','10').text('current');
+  g.append('text').attr('x',xS(opt.cr)).attr('y',yS(opt.mps)-10).attr('fill','#34c98a').attr('font-size','14').attr('text-anchor','middle').text('★');
+  g.append('text').attr('x',xS(opt.cr)).attr('y',yS(opt.mps)-18).attr('fill','#34c98a').attr('font-size','10').attr('text-anchor','middle').text('optimal');
+
+  // Axis labels
+  svg.append('text').attr('x',m.l+w/2).attr('y',H-2).attr('text-anchor','middle').attr('fill','#6b7590').attr('font-size','10').text('Conversion Rate (%)');
+  svg.append('text').attr('transform',`translate(12,${m.t+h/2}) rotate(-90)`).attr('text-anchor','middle').attr('fill','#6b7590').attr('font-size','10').text('Margin / Session ($)');
+  svg.append('text').attr('x',m.l+4).attr('y',14).attr('fill','#6b7590').attr('font-size','9').attr('letter-spacing','0.1em').text('CR–MARGIN FRONTIER · europe_leisure');
+})();
+
+// ─────────────────────────────────────────────────────────────
+// SLIDE 2 — SEASONALITY
+// ─────────────────────────────────────────────────────────────
+(function seasonality() {
+  const el = document.getElementById('seasonality-chart');
+  el.style.height = '180px';
+  const W = el.clientWidth || 700, H = 180;
+  const m = {t:20,r:20,b:36,l:50};
+  const svg = d3.select(el).append('svg').attr('width','100%').attr('height',H);
+  const w = W - m.l - m.r, h = H - m.t - m.b;
+  const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
+
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const weights = [0.80,0.90,1.05,1.15,1.10,1.30,1.55,1.50,0.95,1.05,0.85,1.25];
+  const data = months.map((m,i) => ({m, w: weights[i]}));
+
+  const xS = d3.scaleBand().domain(months).range([0,w]).padding(0.2);
+  const yS = d3.scaleLinear().domain([0,1.7]).range([h,0]);
+
+  g.append('g').attr('transform',`translate(0,${h})`)
+   .call(d3.axisBottom(xS))
+   .call(ax => { ax.select('.domain').attr('stroke','#1e2330'); ax.selectAll('.tick line').remove(); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','10'); });
+  g.append('g').call(d3.axisLeft(yS).ticks(4).tickFormat(d=>d+'×'))
+   .call(ax => { ax.select('.domain').attr('stroke','#1e2330'); ax.selectAll('.tick line').attr('stroke','#1e2330'); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','10'); });
+
+  g.append('line').attr('x1',0).attr('x2',w).attr('y1',yS(1)).attr('y2',yS(1)).attr('stroke','#3a4055').attr('stroke-dasharray','4,3');
+
+  g.selectAll('rect').data(data).enter().append('rect')
+   .attr('x', d=>xS(d.m)).attr('width', xS.bandwidth())
+   .attr('y', d=>yS(d.w)).attr('height', d=>h-yS(d.w))
+   .attr('fill', d => d.w >= 1.3 ? '#4f8ef7' : d.w >= 1.0 ? '#2a3a5e' : '#1e2330')
+   .attr('rx', 1);
+
+  svg.append('text').attr('x',m.l+4).attr('y',14).attr('fill','#6b7590').attr('font-size','9').attr('letter-spacing','0.1em').text('SEASONALITY INDEX BY MONTH  (1.0 = annual average)');
+})();
+
+// ─────────────────────────────────────────────────────────────
+// SLIDE 3 — ELASTICITY FOREST PLOT
+// ─────────────────────────────────────────────────────────────
+(function elasticity() {
+  const data = [
+    {cluster:'asia_budget',      beta:-3.09, lo:-3.45, hi:-2.73, r2:0.923},
+    {cluster:'mea_emerging',     beta:-2.45, lo:-2.89, hi:-2.01, r2:0.856},
+    {cluster:'europe_leisure',   beta:-2.14, lo:-2.38, hi:-1.90, r2:0.906},
+    {cluster:'longhaul_exotic',  beta:-1.74, lo:-2.10, hi:-1.38, r2:0.880},
+    {cluster:'americas_premium', beta:-1.54, lo:-1.79, hi:-1.29, r2:0.861},
+  ];
+
+  // R² rows
+  const container = document.getElementById('r2-rows');
+  data.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'result-row';
+    row.innerHTML = `
+      <span class="result-name">${d.cluster}</span>
+      <div class="result-bar-wrap"><div class="result-bar" style="width:${d.r2*100}%;background:${COLORS[d.cluster]}44;border-right:2px solid ${COLORS[d.cluster]}"></div></div>
+      <span class="result-val">R²=${d.r2.toFixed(3)}</span>
+    `;
+    container.appendChild(row);
+  });
+
+  // Forest plot
+  const el = document.getElementById('elasticity-chart');
+  el.style.height = '240px';
+  const W = el.clientWidth || 380, H = 240;
+  const m = {t:16,r:60,b:36,l:140};
+  const svg = d3.select(el).append('svg').attr('width','100%').attr('height',H);
+  const w = W - m.l - m.r, h = H - m.t - m.b;
+  const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
+
+  const xS = d3.scaleLinear().domain([-3.8, -0.8]).range([0,w]);
+  const yS = d3.scaleBand().domain(data.map(d=>d.cluster)).range([0,h]).padding(0.4);
+
+  g.append('g').attr('transform',`translate(0,${h})`)
+   .call(d3.axisBottom(xS).ticks(4))
+   .call(ax => { ax.select('.domain').attr('stroke','#1e2330'); ax.selectAll('.tick line').attr('stroke','#1e2330'); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','9'); });
+  g.append('g').call(d3.axisLeft(yS))
+   .call(ax => { ax.select('.domain').remove(); ax.selectAll('.tick line').remove(); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','9'); });
+
+  g.append('line').attr('x1',xS(-2.18)).attr('x2',xS(-2.18)).attr('y1',0).attr('y2',h).attr('stroke','#3a4055').attr('stroke-dasharray','3,3');
+
+  data.forEach(d => {
+    const cy = yS(d.cluster) + yS.bandwidth()/2;
+    const color = COLORS[d.cluster];
+    g.append('line').attr('x1',xS(d.lo)).attr('x2',xS(d.hi)).attr('y1',cy).attr('y2',cy).attr('stroke',color).attr('stroke-width',3).attr('opacity',0.4);
+    g.append('circle').attr('cx',xS(d.beta)).attr('cy',cy).attr('r',5).attr('fill',color);
+    g.append('text').attr('x',xS(d.hi)+5).attr('y',cy+4).attr('fill',color).attr('font-size','10').text(d.beta.toFixed(2));
+  });
+
+  svg.append('text').attr('x',m.l+4).attr('y',12).attr('fill','#6b7590').attr('font-size','9').attr('letter-spacing','0.1em').text('OWN-PRICE ELASTICITY β  (95% CI)');
+})();
+
+// ─────────────────────────────────────────────────────────────
+// SLIDE 4 — PARETO FRONTIER MULTI-CLUSTER
+// ─────────────────────────────────────────────────────────────
+(function pareto() {
+  const clusterDefs = [
+    {name:'americas_premium', beta:-1.54, gamma:0.46, refP:18.0, cost:6.3,  baseCR:0.060, compP:17.0},
+    {name:'asia_budget',      beta:-3.09, gamma:0.37, refP:8.5,  cost:2.98, baseCR:0.071, compP:8.0},
+    {name:'europe_leisure',   beta:-2.14, gamma:0.42, refP:9.82, cost:3.44, baseCR:0.056, compP:9.5},
+    {name:'longhaul_exotic',  beta:-1.74, gamma:0.49, refP:15.0, cost:5.25, baseCR:0.069, compP:14.5},
+    {name:'mea_emerging',     beta:-2.45, gamma:0.29, refP:10.0, cost:3.5,  baseCR:0.053, compP:9.8},
+  ];
+
+  const el = document.getElementById('pareto-chart');
+  el.style.height = '280px';
+  const W = el.clientWidth || 420, H = 280;
+  const m = {t:20,r:20,b:40,l:50};
+  const svg = d3.select(el).append('svg').attr('width','100%').attr('height',H);
+  const w = W - m.l - m.r, h = H - m.t - m.b;
+  const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
+
+  const allFrontiers = clusterDefs.map(cd => {
+    const prices = d3.range(cd.refP*0.5, cd.refP*1.6, cd.refP*0.01);
+    return prices.map(p => {
+      const cr = Math.max(0.001, Math.min(0.45, cd.baseCR * Math.exp(cd.beta*Math.log(p/cd.refP) + cd.gamma*Math.log(cd.compP/p))));
+      return {p, cr:cr*100, mps: cr*(p-cd.cost), cluster:cd.name};
+    });
+  });
+
+  const allPts = allFrontiers.flat();
+  const xS = d3.scaleLinear().domain([0, d3.max(allPts,d=>d.cr)]).range([0,w]);
+  const yS = d3.scaleLinear().domain([0, d3.max(allPts,d=>d.mps)*1.1]).range([h,0]);
+
+  g.append('g').attr('transform',`translate(0,${h})`)
+   .call(d3.axisBottom(xS).ticks(5).tickFormat(d=>d.toFixed(0)+'%'))
+   .call(ax => { ax.select('.domain').attr('stroke','#1e2330'); ax.selectAll('.tick line').attr('stroke','#1e2330'); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','9'); });
+  g.append('g').call(d3.axisLeft(yS).ticks(4).tickFormat(d=>'$'+d.toFixed(2)))
+   .call(ax => { ax.select('.domain').attr('stroke','#1e2330'); ax.selectAll('.tick line').attr('stroke','#1e2330'); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','9'); });
+
+  g.append('g').selectAll('line').data(yS.ticks(4)).enter().append('line')
+   .attr('x1',0).attr('x2',w).attr('y1',d=>yS(d)).attr('y2',d=>yS(d)).attr('stroke','#1e2330').attr('stroke-dasharray','3,3');
+
+  const line = d3.line().x(d=>xS(d.cr)).y(d=>yS(d.mps)).curve(d3.curveCatmullRom);
+  allFrontiers.forEach((f, i) => {
+    const cd = clusterDefs[i];
+    const color = COLORS[cd.name];
+    g.append('path').datum(f).attr('fill','none').attr('stroke',color).attr('stroke-width',1.8).attr('d',line);
+    const opt = f.reduce((a,b) => b.mps>a.mps?b:a);
+    g.append('text').attr('x',xS(opt.cr)).attr('y',yS(opt.mps)-8).attr('fill',color).attr('font-size','12').attr('text-anchor','middle').text('★');
+  });
+
+  svg.append('text').attr('x',m.l+4).attr('y',12).attr('fill','#6b7590').attr('font-size','9').attr('letter-spacing','0.1em').text('CR–MARGIN FRONTIER · ALL CLUSTERS  ★ = OPTIMAL PRICE');
+  svg.append('text').attr('x',m.l+w/2).attr('y',H-2).attr('text-anchor','middle').attr('fill','#6b7590').attr('font-size','9').text('Conversion Rate (%)');
+
+  // Table
+  const tbl = document.getElementById('frontier-table');
+  clusterDefs.forEach(cd => {
+    const prices = d3.range(cd.refP*0.5, cd.refP*1.6, cd.refP*0.01);
+    const frontier = prices.map(p => {
+      const cr = Math.max(0.001, Math.min(0.45, cd.baseCR * Math.exp(cd.beta*Math.log(p/cd.refP) + cd.gamma*Math.log(cd.compP/p))));
+      return {p, cr, mps: cr*(p-cd.cost)};
+    });
+    const opt = frontier.reduce((a,b) => b.mps>a.mps?b:a);
+    const uplift = (opt.mps - cd.baseCR*(cd.refP-cd.cost)) / (cd.baseCR*(cd.refP-cd.cost));
+    const row = document.createElement('div');
+    row.className = 'result-row';
+    row.innerHTML = `
+      <span class="result-name" style="color:${COLORS[cd.name]}">${cd.name.replace('_',' ')}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">opt $${opt.p.toFixed(2)}</span>
+      <span class="result-val" style="color:${uplift>0?'var(--accent3)':'var(--accent2)'}">${uplift>0?'+':''}${(uplift*100).toFixed(0)}%</span>
+    `;
+    tbl.appendChild(row);
+  });
+})();
+
+// ─────────────────────────────────────────────────────────────
+// SLIDE 5 — FORECAST METRICS + FEATURE IMPORTANCE
+// ─────────────────────────────────────────────────────────────
+(function forecast() {
+  // Metrics cards
+  const metrics = [
+    {label:'Test R²',    val:'0.835', color:'var(--accent3)'},
+    {label:'Train R²',   val:'0.970', color:'var(--accent)'},
+    {label:'MAPE',       val:'16.1%', color:'var(--accent4)'},
+    {label:'Test window',val:'60 days',color:'var(--text-dim)'},
+  ];
+  const mc = document.getElementById('forecast-metrics');
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;';
+  metrics.forEach(m => {
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.style.padding = '0.8rem';
+    c.innerHTML = `<div class="card-label">${m.label}</div><div style="font-family:var(--mono);font-size:1.4rem;font-weight:600;color:${m.color}">${m.val}</div>`;
+    grid.appendChild(c);
+  });
+  mc.appendChild(grid);
+
+  // Feature importance bar chart
+  const features = [
+    {name:'lag_7',          imp:0.28, type:'lag'},
+    {name:'lag_28',         imp:0.19, type:'lag'},
+    {name:'roll_mean_7',    imp:0.14, type:'lag'},
+    {name:'roll_mean_28',   imp:0.10, type:'lag'},
+    {name:'lag_14',         imp:0.08, type:'lag'},
+    {name:'sin_annual',     imp:0.07, type:'cal'},
+    {name:'cos_annual',     imp:0.05, type:'cal'},
+    {name:'dest_mean_sess', imp:0.04, type:'dest'},
+    {name:'day_of_week',    imp:0.03, type:'cal'},
+    {name:'log_price',      imp:0.02, type:'dest'},
+  ];
+
+  const el = document.getElementById('forecast-chart');
+  el.style.height = '260px';
+  const W = el.clientWidth || 380, H = 260;
+  const m = {t:20,r:80,b:20,l:130};
+  const svg = d3.select(el).append('svg').attr('width','100%').attr('height',H);
+  const w = W - m.l - m.r, h = H - m.t - m.b;
+  const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
+
+  const xS = d3.scaleLinear().domain([0, 0.32]).range([0,w]);
+  const yS = d3.scaleBand().domain(features.map(d=>d.name)).range([0,h]).padding(0.25);
+
+  g.append('g').call(d3.axisLeft(yS))
+   .call(ax => { ax.select('.domain').remove(); ax.selectAll('.tick line').remove(); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','9'); });
+
+  const typeColor = {lag:'#4f8ef7', cal:'#f0a040', dest:'#e05c6b'};
+  features.forEach(d => {
+    const color = typeColor[d.type];
+    g.append('rect')
+     .attr('x',0).attr('width',0)
+     .attr('y',yS(d.name)).attr('height',yS.bandwidth())
+     .attr('fill',color).attr('opacity',0.7).attr('rx',1)
+     .transition().duration(800).delay(features.indexOf(d)*60)
+     .attr('width', xS(d.imp));
+    g.append('text').attr('x',xS(d.imp)+5).attr('y',yS(d.name)+yS.bandwidth()/2+4)
+     .attr('fill',color).attr('font-size','9').text((d.imp*100).toFixed(0)+'%');
+  });
+
+  svg.append('text').attr('x',m.l+4).attr('y',12).attr('fill','#6b7590').attr('font-size','9').attr('letter-spacing','0.1em').text('FEATURE IMPORTANCE');
+
+  // Legend
+  [{label:'Lag/Rolling',color:'#4f8ef7'},{label:'Calendar',color:'#f0a040'},{label:'Dest/Price',color:'#e05c6b'}].forEach((l,i) => {
+    const lx = m.l + w + 8, ly = m.t + 20 + i*20;
+    svg.append('rect').attr('x',lx).attr('y',ly-8).attr('width',8).attr('height',8).attr('fill',l.color).attr('rx',1);
+    svg.append('text').attr('x',lx+11).attr('y',ly).attr('fill','#6b7590').attr('font-size','9').text(l.label);
+  });
+})();
+
+// ─────────────────────────────────────────────────────────────
+// SLIDE 6 — PEEKING PROBLEM + POWER TABLE
+// ─────────────────────────────────────────────────────────────
+(function abtest() {
+  // Peeking chart
+  const el = document.getElementById('peeking-chart');
+  el.style.height = '220px';
+  const W = el.clientWidth || 380, H = 220;
+  const m = {t:20,r:20,b:40,l:50};
+  const svg = d3.select(el).append('svg').attr('width','100%').attr('height',H);
+  const w = W - m.l - m.r, h = H - m.t - m.b;
+  const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
+
+  const barData = [
+    {label:'Correct test\n(end only)', fpr:6.4, color:'#34c98a'},
+    {label:'Peeking\n(every 10%)',     fpr:20.2, color:'#e05c6b'},
+    {label:'Nominal α',                fpr:5.0,  color:'#f0a040'},
+  ];
+
+  const xS = d3.scaleBand().domain(barData.map(d=>d.label)).range([0,w]).padding(0.35);
+  const yS = d3.scaleLinear().domain([0,26]).range([h,0]);
+
+  g.append('g').attr('transform',`translate(0,${h})`)
+   .call(d3.axisBottom(xS))
+   .call(ax => { ax.select('.domain').attr('stroke','#1e2330'); ax.selectAll('.tick line').remove(); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','9').attr('text-anchor','middle'); });
+  g.append('g').call(d3.axisLeft(yS).ticks(5).tickFormat(d=>d+'%'))
+   .call(ax => { ax.select('.domain').attr('stroke','#1e2330'); ax.selectAll('.tick line').attr('stroke','#1e2330'); ax.selectAll('.tick text').attr('fill','#6b7590').attr('font-size','9'); });
+
+  g.append('line').attr('x1',0).attr('x2',w).attr('y1',yS(5)).attr('y2',yS(5)).attr('stroke','#3a4055').attr('stroke-dasharray','4,3');
+
+  barData.forEach(d => {
+    g.append('rect').attr('x',xS(d.label)).attr('width',xS.bandwidth()).attr('y',h).attr('height',0).attr('fill',d.color).attr('opacity',0.8).attr('rx',1)
+     .transition().duration(700).attr('y',yS(d.fpr)).attr('height',h-yS(d.fpr));
+    g.append('text').attr('x',xS(d.label)+xS.bandwidth()/2).attr('y',yS(d.fpr)-6).attr('text-anchor','middle').attr('fill',d.color).attr('font-size','11').attr('font-weight','600').text(d.fpr+'%');
+  });
+
+  svg.append('text').attr('x',m.l+4).attr('y',12).attr('fill','#6b7590').attr('font-size','9').attr('letter-spacing','0.1em').text('FALSE POSITIVE RATE  (1,000 SIMULATIONS, NULL HYPOTHESIS)');
+
+  // Power table
+  const powerData = [
+    {mde:'5%',  n:'108,332', days:'65d', weeks:'9.3w'},
+    {mde:'10%', n:'27,702',  days:'34d', weeks:'4.9w'},
+    {mde:'15%', n:'12,586',  days:'15d', weeks:'2.2w'},
+    {mde:'20%', n:'7,233',   days:'9d',  weeks:'1.3w'},
+  ];
+  const tbl = document.getElementById('power-table');
+  const header = document.createElement('div');
+  header.className = 'result-row';
+  header.innerHTML = `<span class="result-name" style="color:var(--text-dim)">MDE</span><span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">n/variant</span><span class="result-val" style="color:var(--text-dim)">duration</span>`;
+  tbl.appendChild(header);
+  powerData.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'result-row';
+    row.innerHTML = `<span class="result-name">${d.mde}</span><span style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">${d.n}</span><span class="result-val">${d.weeks}</span>`;
+    tbl.appendChild(row);
+  });
+  const note = document.createElement('div');
+  note.style.cssText = 'font-size:10px;color:var(--text-dim);margin-top:0.5rem;font-family:var(--mono);';
+  note.textContent = 'cluster-level · 1,680 sessions/day · α=0.05 · power=0.80';
+  tbl.appendChild(note);
+})();
+</script>
+</body>
+</html>
