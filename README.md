@@ -194,6 +194,12 @@ jupyter lab notebooks/
 
 ---
 
+## Interactive Presentation
+
+[View the slide deck](https://ferariz.github.io/esim-pricing-engine/slides.html)
+
+---
+
 ## About
 
 A complete pricing data science system for travel eSIM products — elasticity modelling, demand forecasting, A/B experimentation, and a recommendation engine.
